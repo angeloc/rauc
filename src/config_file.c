@@ -1097,6 +1097,45 @@ gboolean load_config(const gchar *filename, RaucConfig **config, GError **error)
 		return FALSE;
 	}
 
+	/*parse [poll] section */
+	c->poll_source = key_file_consume_string(key_file, "poll", "source", NULL);
+	c->poll_interval_sec = key_file_consume_integer(key_file, "poll", "interval-sec", &ierror);
+		if (g_error_matches(ierror, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND)) {
+		c->poll_interval_sec = 0; /* to indicate 'not enabled' */
+		g_clear_error(&ierror);
+	} else if (ierror) {
+		g_propagate_error(error, ierror);
+		return FALSE;
+	}
+	if (c->poll_interval_sec < 0) {
+		g_set_error(
+				error,
+				R_CONFIG_ERROR,
+				R_CONFIG_ERROR_BOOTLOADER,
+				"Value for \"poll_interval_sec\" must not be negative");
+		return FALSE;
+	}
+
+	c->poll_max_interval_sec = key_file_consume_integer(key_file, "poll", "max-interval-sec", &ierror);
+		if (g_error_matches(ierror, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND)) {
+		c->poll_max_interval_sec = 86400; /* retry after a day */
+		g_clear_error(&ierror);
+	} else if (ierror) {
+		g_propagate_error(error, ierror);
+		return FALSE;
+	}
+	if (c->poll_max_interval_sec <= 0 || c->poll_max_interval_sec < c->poll_interval_sec) {
+		g_set_error(
+				error,
+				R_CONFIG_ERROR,
+				R_CONFIG_ERROR_BOOTLOADER,
+				"Value for \"poll_max_interval_sec\" must be positive and bigger than interval_sec");
+		return FALSE;
+	}
+	
+	c->poll_reboot_cmd = key_file_consume_string(key_file, "poll", "reboot-cmd", NULL);
+	g_key_file_remove_group(key_file, "poll", NULL);
+
 	/* parse [slot.*.#] sections */
 	c->slots = parse_slots(filename, c->data_directory, key_file, &ierror);
 	if (!c->slots) {

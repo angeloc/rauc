@@ -89,6 +89,12 @@ typedef struct {
 	/* logging */
 	GList *loggers;
 
+	/* polling */
+	gchar *poll_source;
+	gint poll_interval_sec;
+	gint poll_max_interval_sec;
+	gchar *poll_reboot_cmd;
+
 	GHashTable *slots;
 	/* flag to ensure slot states were determined */
 	gboolean slot_states_determined;

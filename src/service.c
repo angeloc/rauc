@@ -52,6 +52,42 @@ static gboolean service_install_cleanup(gpointer data)
 	return G_SOURCE_REMOVE;
 }
 
+static gboolean service_run_poll(gpointer data) {
+	RaucInstallArgs *args = install_args_new();
+	gchar *source = data;
+	gboolean res;
+
+	res = !r_context_get_busy();
+	if (!res) {
+		g_message("Already processing a different method");
+		args->status_result = 1;
+		goto out;
+	}
+
+	args->name = g_strdup(source);
+	args->notify = service_install_notify;
+	args->cleanup = service_install_cleanup;
+	
+	res = install_run(args);
+	if (!res) {
+		g_message("Failed to launch install thread");
+		args->status_result = 1;
+		goto out;
+	}
+
+out:
+	return G_SOURCE_CONTINUE;
+}
+
+static void service_start_poll(void) {
+	gint interval = r_context()->config->poll_interval_sec;
+	
+	if (interval){
+		g_timeout_add_seconds(interval, service_run_poll, r_context()->config->poll_source);
+		g_message("Remote polling started: checking each %d seconds", interval);
+	}
+}
+
 /*
  * Constructs RaucBundleAccessArgs from a GVariant dictionary.
  */
@@ -565,6 +601,8 @@ static void r_on_bus_acquired(GDBusConnection *connection,
 	r_installer_set_compatible(r_installer, r_context()->config->system_compatible);
 	r_installer_set_variant(r_installer, r_context()->config->system_variant);
 	r_installer_set_boot_slot(r_installer, r_context()->bootslot);
+
+	service_start_poll();
 
 	return;
 }
